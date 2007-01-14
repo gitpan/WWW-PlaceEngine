@@ -1,5 +1,8 @@
 Revision history for Perl extension WWW::PlaceEngine.
 
+0.02  Sun Jan 14 12:10:00 2007
+        - Rebuild all module to suit for Official PlaceeEngine API
+
 0.01  Sat Nov 25 21:12:11 2006
 	- original version; created by h2xs 1.23 with options
 		-X -A WWW::PlaceEngine

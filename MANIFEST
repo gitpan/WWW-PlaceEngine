@@ -1,6 +1,5 @@
 Changes
 lib/WWW/PlaceEngine.pm
-lib/WWW/PlaceEngine/Object.pm
 Makefile.PL
 MANIFEST
 t/WWW-PlaceEngine.t
