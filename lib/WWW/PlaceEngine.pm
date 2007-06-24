@@ -5,14 +5,14 @@ use vars qw($VERSION);
 use Readonly;
 use JSON;
 use LWP::UserAgent;
-$VERSION = '0.02';
+$VERSION = '0.03';
 $JSON::QuotApos = 1;
 $JSON::UTF8 = 1;
 
 Readonly my $API_HOST      => 'http://www.placeengine.com/api';
 Readonly my $RTAG_DAEMON   => 'http://localhost:5448';
 Readonly my $APKEY_DEFAULT => 'jVX7qKlFTUUcbNOBAnVX7XFhSUm6FyFzapE5oyv4Y.D6asJrrI5w3dUKsBgrpXe8eDIYrAff3WWKtXxnx.SX7OztpPf7SrrcJK-c0fyZKYSNVn-Gp3Kqb-4-VajcTxlFKt12r44C6oK5OPh7UsWLvt-xB3J.TuPHj0ptHJtuGAn1xc.ZA-4R3LBOQyYUsyphZACHrMvKQ1dAlPZPdyiwxpQfFczAZ4AljisHF5eFvjfYk6y5YUNsaT-TOqNCG22UyLTKL4t0bk.43YJU0M2cbdf07TWmDkQOy5JP9NmX1Ea8vbCZTM.DgEqPrsmrOaI9mmvEVppeCxASBz48ON.shw__,cGVybA__,44OR44O844Or44OX44Ot44Kw44Op44Og';
-Readonly my $TESTED_RTAGD  => 'w061227';
+Readonly my $TESTED_RTAGD  => 'w070606';
 Readonly my $AGENT_DEFAULT => "WWW::PlaceEngine/$VERSION";
 Readonly my $ERR_NOT_OCCUR => 0;
 Readonly my $ERR_WIFI_OFF  => 1;
@@ -23,6 +23,7 @@ Readonly my $ERR_NO_APPKEY => 6;
 Readonly my $ERR_NO_RTAGD  => 7;
 Readonly my $ERR_NO_HOST   => 8;
 Readonly my $ERR_RTAGD_OLD => 9;
+Readonly my $ERR_NO_LOCAL  => 10;
 
 Readonly my $ERROR_TABLE   => {
                                   $ERR_NOT_OCCUR => '',
@@ -34,6 +35,7 @@ Readonly my $ERROR_TABLE   => {
                                   $ERR_NO_RTAGD  => 'PlaceEngine client not found or cannot accessible.',
                                   $ERR_NO_HOST   => 'PlaceEngine API host cannot accessible.',
                                   $ERR_RTAGD_OLD => "PlaceEngine client's version is old. At least $TESTED_RTAGD version is need",
+                                  $ERR_NO_LOCAL  => 'No APs are found in local DB.',
                               };
 
 ##############################################################################
@@ -75,6 +77,31 @@ sub get_location {
     $self->check_rtagd or return;
     $self->get_rtag or return;
     $self->decode_rtag();
+}
+
+sub get_local_location {
+    my $self = shift;
+    my $time = shift || $self->t || time;
+    my $param = '/locdb?t=' . $time;
+    $param .= '&appk=' . $self->appkey;
+
+    my $ua = $self->ua || $self->ua(LWP::UserAgent->new(agent=>$AGENT_DEFAULT));
+    my $res = $ua->get($self->rtagd . $param);
+    return $self->set_err($ERR_NO_RTAGD) if !$res->is_success;
+
+    my $cont = $res->content;
+    my ($long,$lat,$result,$opt) = @{jsonToObj($cont)};
+    for my $name (qw/long lat result/) {
+        $opt->{$name} = eval qq{\$$name};
+    }
+
+    if ($result < 0) {
+        return $self->set_err($result * -1);
+    } elsif ($result == 0) {
+        return $self->set_err($ERR_NO_LOCAL) if (($opt->{lat} == 0.0) && ($opt->{long} == 0.0));
+    }
+
+    return $opt;
 }
 
 sub check_rtagd {
@@ -205,6 +232,13 @@ WWW::PlaceEngine - get PC's location information from PlaceEngine.
  
  # Or, you can run all process at one method. 
  $loc = $wpl->get_location() or die $wpl->err;
+ 
+ ## Get location from local DB
+ $loc = $wpl->get_local_location() or die $wpl->err;
+ 
+ # Get only latlon data from local DB
+ my $lat   = $loc->{lat};    # Latitude
+ my $long  = $loc->{long};   # Longitude
 
 =head1 DESCRIPTION
 
@@ -346,6 +380,24 @@ If some error occurs, this method return undef value, and error message can be c
 =item get_location()
 
 run C<check_rtagd>, C<get_rtag> and C<decode_rtag> methods in order.
+If some error occurs, this method return undef value, and error message can be checked by C<err> method.
+
+=item get_local_location()
+
+ask location to local DB.
+This method is independent and cannot share rtag data with other methods.
+For example, even if you set old rtag data to rtag property, this method returns realtime location data.
+
+ my $wpl = WWW::PlaceEngine->new();
+ 
+ # Set yesterday's rtag data
+ my $wpl->rtag($rtag_yesterday);
+ 
+ # Get location from local DB
+ my $loc = $wpl->get_local_location();
+ 
+ # $loc is not yesterday's location but now location data.
+
 If some error occurs, this method return undef value, and error message can be checked by C<err> method.
 
 =item err
